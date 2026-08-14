@@ -69,7 +69,7 @@ jobs:
           cd "./GDPS Diagnostic Scanner"
           
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 \
-          go build -ldflags="-s -w" -o "../build/${OUT_NAME}" "./cmd/scanner"
+          go build -ldflags="-s -w" -o "../build/${OUT_NAME}" ./cmd/scanner
 
       - name: Archive binaries
         run: |
