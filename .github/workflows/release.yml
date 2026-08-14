@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Generate version
         id: setver
@@ -23,16 +25,18 @@ jobs:
           VERSION="diagnostic_1.0.0"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Push tag using PAT
+      - name: Create and Push Tag
         env:
-          TOKEN: ${{ secrets.PAT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           git config user.name "GDPS-Creator"
           git config user.email "actions@gdps-tools.local"
 
+          # Создаём локальный тег
           git tag ${{ steps.setver.outputs.version }}
 
-          git push https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git ${{ steps.setver.outputs.version }}
+          # Отправляем тег напрямую через токен
+          git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git ${{ steps.setver.outputs.version }}
 
   build:
     name: Build all modules
@@ -41,8 +45,13 @@ jobs:
 
     strategy:
       matrix:
-        goos: [linux, windows]
-        goarch: [amd64]
+        include:
+          - goos: linux
+            goarch: amd64
+            ext: ""
+          - goos: windows
+            goarch: amd64
+            ext: ".exe"
 
     steps:
       - name: Checkout
@@ -56,33 +65,41 @@ jobs:
       - name: Build modules
         run: |
           mkdir -p build
-
-          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
-          go build -o build/gdps-diagnostic-scanner-${{ matrix.goos }}-${{ matrix.goarch }} \
-          "./GDPS Diagnostic Scanner/cmd/scanner"
+          
+          # Определяем путь к выходному файлу с правильным расширением (.exe для Windows)
+          OUT_NAME="gdps-diagnostic-scanner-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
+          
+          # Сборка Go
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 \
+          go build -ldflags="-s -w" -o "build/${OUT_NAME}" "./GDPS Diagnostic Scanner/cmd/scanner"
 
       - name: Archive binaries
         run: |
+          cd build
           if [ "${{ matrix.goos }}" = "windows" ]; then
-            zip -j build/gdps-tools-windows-amd64.zip build/*
+            zip -j gdps-tools-windows-amd64.zip gdps-diagnostic-scanner-windows-amd64.exe
           else
-            tar -czf build/gdps-tools-linux-amd64.tar.gz -C build .
+            tar -czf gdps-tools-linux-amd64.tar.gz gdps-diagnostic-scanner-linux-amd64
           fi
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: binaries
-          path: build/*
+          name: binaries-${{ matrix.goos }}
+          path: |
+            build/*.zip
+            build/*.tar.gz
 
   metadata:
     name: Generate metadata
     runs-on: ubuntu-latest
-    needs: [versioning, build]
+    needs: [versioning]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Generate CHANGELOG.md
         run: |
@@ -91,13 +108,15 @@ jobs:
 
       - name: Generate release.json
         run: |
-          echo '{' > release.json
-          echo '  "version": "'${{ needs.versioning.outputs.version }}'",' >> release.json
-          echo '  "generated_at": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'",' >> release.json
-          echo '  "modules": [' >> release.json
-          echo '    "GDPS Diagnostic Scanner"' >> release.json
-          echo '  ]' >> release.json
-          echo '}' >> release.json
+          cat <<EOT > release.json
+          {
+            "version": "${{ needs.versioning.outputs.version }}",
+            "generated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "modules": [
+              "GDPS Diagnostic Scanner"
+            ]
+          }
+          EOT
 
       - name: Upload metadata
         uses: actions/upload-artifact@v4
@@ -113,23 +132,22 @@ jobs:
     needs: [versioning, build, metadata]
 
     steps:
-      - name: Download binaries
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          name: binaries
           path: release-files
-
-      - name: Download metadata
-        uses: actions/download-artifact@v4
-        with:
-          name: metadata
-          path: release-files
+          pattern: '*'
+          merge-multiple: true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.versioning.outputs.version }}
           name: "GDPS Tools Release ${{ needs.versioning.outputs.version }}"
-          files: release-files/*
+          body_path: release-files/CHANGELOG.md
+          files: |
+            release-files/*.zip
+            release-files/*.tar.gz
+            release-files/release.json
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
