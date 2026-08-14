@@ -5,6 +5,10 @@ on:
     branches:
       - main
 
+# Явно выдаём токену права на запись тегов и релизов (работает даже если в GUI стоит Read-only)
+permissions:
+  contents: write
+
 jobs:
   versioning:
     name: Generate version and tag
@@ -26,17 +30,12 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Create and Push Tag
-        env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
-          git config user.name "GDPS-Creator"
-          git config user.email "actions@gdps-tools.local"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # Создаём локальный тег
           git tag ${{ steps.setver.outputs.version }}
-
-          # Отправляем тег напрямую через токен
-          git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git ${{ steps.setver.outputs.version }}
+          git push origin ${{ steps.setver.outputs.version }}
 
   build:
     name: Build all modules
@@ -66,10 +65,8 @@ jobs:
         run: |
           mkdir -p build
           
-          # Определяем путь к выходному файлу с правильным расширением (.exe для Windows)
           OUT_NAME="gdps-diagnostic-scanner-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
           
-          # Сборка Go
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 \
           go build -ldflags="-s -w" -o "build/${OUT_NAME}" "./GDPS Diagnostic Scanner/cmd/scanner"
 
@@ -150,4 +147,4 @@ jobs:
             release-files/*.tar.gz
             release-files/release.json
         env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
