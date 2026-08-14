@@ -1,4 +1,4 @@
-# GDPS Tools
+# GDPS Diagnostic Scanner
 
 A collection of utilities designed to simplify diagnostics, configuration, and maintenance of GDPS servers. The project provides modular tools for checking server health, generating configuration files, analyzing logs, and validating network tunnels.
 
