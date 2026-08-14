@@ -29,8 +29,11 @@ jobs:
         run: |
           git config user.name "GDPS-Creator"
           git config user.email "actions@gdps-tools.local"
+
           git tag ${{ steps.setver.outputs.version }}
-          git push https://$TOKEN@github.com/GDPS-Creator/GDPS-Tools.git ${{ steps.setver.outputs.version }}
+
+          git remote add origin-token https://$TOKEN@github.com/GDPS-Creator/GDPS-Tools.git
+          git push origin-token ${{ steps.setver.outputs.version }}
 
   build:
     name: Build all modules
@@ -54,6 +57,7 @@ jobs:
       - name: Build modules
         run: |
           mkdir -p build
+
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
           go build -o build/gdps-diagnostic-scanner-${{ matrix.goos }}-${{ matrix.goarch }} \
           "./GDPS Diagnostic Scanner/cmd/scanner"
