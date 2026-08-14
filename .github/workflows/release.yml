@@ -20,18 +20,17 @@ jobs:
       - name: Generate version
         id: setver
         run: |
-          BASE="diagnostic"
-          DATE=$(date +'%Y%m%d')
-          RAND=$((RANDOM % 1000))
-          VERSION="${BASE}_${DATE}.${RAND}"
+          VERSION="diagnostic_1.0.0"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Create tag
+      - name: Push tag using PAT
+        env:
+          TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
+          git config user.name "GDPS-Creator"
+          git config user.email "actions@gdps-tools.local"
           git tag ${{ steps.setver.outputs.version }}
-          git push origin ${{ steps.setver.outputs.version }}
+          git push https://$TOKEN@github.com/GDPS-Creator/GDPS-Tools.git ${{ steps.setver.outputs.version }}
 
   build:
     name: Build all modules
@@ -55,7 +54,6 @@ jobs:
       - name: Build modules
         run: |
           mkdir -p build
-
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
           go build -o build/gdps-diagnostic-scanner-${{ matrix.goos }}-${{ matrix.goarch }} \
           "./GDPS Diagnostic Scanner/cmd/scanner"
@@ -131,4 +129,4 @@ jobs:
           name: "GDPS Tools Release ${{ needs.versioning.outputs.version }}"
           files: release-files/*
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
