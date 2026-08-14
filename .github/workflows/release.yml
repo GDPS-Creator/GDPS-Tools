@@ -1,14 +1,42 @@
-name: Build and Release GDPS Tools
+name: Auto Build and Release GDPS Tools
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
 
 jobs:
+  versioning:
+    name: Generate version and tag
+    runs-on: ubuntu-latest
+
+    outputs:
+      version: ${{ steps.setver.outputs.version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate version
+        id: setver
+        run: |
+          BASE="diagnostic"
+          DATE=$(date +'%Y%m%d')
+          RAND=$((RANDOM % 1000))
+          VERSION="${BASE}_${DATE}.${RAND}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create tag
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git tag ${{ steps.setver.outputs.version }}
+          git push origin ${{ steps.setver.outputs.version }}
+
   build:
     name: Build all modules
     runs-on: ubuntu-latest
+    needs: versioning
 
     strategy:
       matrix:
@@ -16,10 +44,10 @@ jobs:
         goarch: [amd64]
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Go
+      - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: "1.22"
@@ -28,13 +56,9 @@ jobs:
         run: |
           mkdir -p build
 
-          # GDPS Diagnostic Scanner
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
           go build -o build/gdps-diagnostic-scanner-${{ matrix.goos }}-${{ matrix.goarch }} \
           "./GDPS Diagnostic Scanner/cmd/scanner"
-
-          # Future modules can be added here:
-          # GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o build/module-name ./path/to/module
 
       - name: Archive binaries
         run: |
@@ -50,24 +74,24 @@ jobs:
           name: binaries
           path: build/*
 
-  changelog:
-    name: Generate CHANGELOG and release.json
+  metadata:
+    name: Generate metadata
     runs-on: ubuntu-latest
-    needs: build
+    needs: [versioning, build]
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Generate CHANGELOG.md
         run: |
-          echo "## Changelog for $GITHUB_REF" > CHANGELOG.md
-          git log --pretty=format:"- %s (%h)" $(git describe --tags --abbrev=0)..HEAD >> CHANGELOG.md
+          echo "## Changelog for version ${{ needs.versioning.outputs.version }}" > CHANGELOG.md
+          git log --pretty=format:"- %s (%h)" -10 >> CHANGELOG.md
 
       - name: Generate release.json
         run: |
           echo '{' > release.json
-          echo '  "version": "'${GITHUB_REF#refs/tags/}'",' >> release.json
+          echo '  "version": "'${{ needs.versioning.outputs.version }}'",' >> release.json
           echo '  "generated_at": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'",' >> release.json
           echo '  "modules": [' >> release.json
           echo '    "GDPS Diagnostic Scanner"' >> release.json
@@ -85,7 +109,7 @@ jobs:
   release:
     name: Publish Release
     runs-on: ubuntu-latest
-    needs: [build, changelog]
+    needs: [versioning, build, metadata]
 
     steps:
       - name: Download binaries
@@ -103,6 +127,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.versioning.outputs.version }}
+          name: "GDPS Tools Release ${{ needs.versioning.outputs.version }}"
           files: release-files/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
