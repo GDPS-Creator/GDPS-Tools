@@ -32,8 +32,7 @@ jobs:
 
           git tag ${{ steps.setver.outputs.version }}
 
-          git remote add origin-token https://$TOKEN@github.com/GDPS-Creator/GDPS-Tools.git
-          git push origin-token ${{ steps.setver.outputs.version }}
+          git push https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git ${{ steps.setver.outputs.version }}
 
   build:
     name: Build all modules
