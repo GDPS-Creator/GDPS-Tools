@@ -1,0 +1,108 @@
+name: Build and Release GDPS Tools
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    name: Build all modules
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        goos: [linux, windows]
+        goarch: [amd64]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Build modules
+        run: |
+          mkdir -p build
+
+          # GDPS Diagnostic Scanner
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
+          go build -o build/gdps-diagnostic-scanner-${{ matrix.goos }}-${{ matrix.goarch }} \
+          "./GDPS Diagnostic Scanner/cmd/scanner"
+
+          # Future modules can be added here:
+          # GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o build/module-name ./path/to/module
+
+      - name: Archive binaries
+        run: |
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            zip -j build/gdps-tools-windows-amd64.zip build/*
+          else
+            tar -czf build/gdps-tools-linux-amd64.tar.gz -C build .
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries
+          path: build/*
+
+  changelog:
+    name: Generate CHANGELOG and release.json
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Generate CHANGELOG.md
+        run: |
+          echo "## Changelog for $GITHUB_REF" > CHANGELOG.md
+          git log --pretty=format:"- %s (%h)" $(git describe --tags --abbrev=0)..HEAD >> CHANGELOG.md
+
+      - name: Generate release.json
+        run: |
+          echo '{' > release.json
+          echo '  "version": "'${GITHUB_REF#refs/tags/}'",' >> release.json
+          echo '  "generated_at": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'",' >> release.json
+          echo '  "modules": [' >> release.json
+          echo '    "GDPS Diagnostic Scanner"' >> release.json
+          echo '  ]' >> release.json
+          echo '}' >> release.json
+
+      - name: Upload metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: metadata
+          path: |
+            CHANGELOG.md
+            release.json
+
+  release:
+    name: Publish Release
+    runs-on: ubuntu-latest
+    needs: [build, changelog]
+
+    steps:
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: binaries
+          path: release-files
+
+      - name: Download metadata
+        uses: actions/download-artifact@v4
+        with:
+          name: metadata
+          path: release-files
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-files/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
