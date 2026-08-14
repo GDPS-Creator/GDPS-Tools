@@ -5,7 +5,6 @@ on:
     branches:
       - main
 
-# Явно выдаём токену права на запись тегов и релизов (работает даже если в GUI стоит Read-only)
 permissions:
   contents: write
 
@@ -67,8 +66,11 @@ jobs:
           
           OUT_NAME="gdps-diagnostic-scanner-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
           
+          # Заходим в папку, где лежит go.mod
+          cd "./GDPS Diagnostic Scanner"
+          
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 \
-          go build -ldflags="-s -w" -o "build/${OUT_NAME}" "./GDPS Diagnostic Scanner/cmd/scanner"
+          go build -ldflags="-s -w" -o "../build/${OUT_NAME}" "./cmd/scanner"
 
       - name: Archive binaries
         run: |
