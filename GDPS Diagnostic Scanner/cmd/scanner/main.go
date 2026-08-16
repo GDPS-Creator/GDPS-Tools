@@ -2,11 +2,11 @@ package main
 
 import (
     "fmt"
-    "GDPS-Diagnostic-Scanner/internal/mysql"
-    "GDPS-Diagnostic-Scanner/internal/ftp"
-    "GDPS-Diagnostic-Scanner/internal/ports"
-    "GDPS-Diagnostic-Scanner/internal/tunnel"
-    "GDPS-Diagnostic-Scanner/internal/report"
+    "gdps-diagnostic-scanner/internal/mysql"
+    "gdps-diagnostic-scanner/internal/ftp"
+    "gdps-diagnostic-scanner/internal/ports"
+    "gdps-diagnostic-scanner/internal/tunnel"
+    "gdps-diagnostic-scanner/internal/report"
 )
 
 func main() {
