@@ -1,7 +1,6 @@
 package tunnel
 
 import (
-    "fmt"
     "net"
     "time"
 )
